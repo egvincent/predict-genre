@@ -84,7 +84,7 @@ def learnPredictor(trainExamples, testExamples, genreID, numIters, eta):
             if 1 - grad * temp > 0: # formula used to be 1 - grad * j[1] and j[1] used to be 0 or 1: the tru label.
                 for k in f:
                     weights[k] -= eta * f[k] * temp*-1
-    print util.evaluatePredictor(trainExamples, lambda x: math.copysign(1, util.dotProduct(weights, x)), genreID), "train:", genreID
+    print util.evaluatePredictor(trainExamples, lambda x: math.copysign(1, util.dotProduct(weights, x)), genreID), "train:", "genre=", genreID
     print util.evaluatePredictor(testExamples, lambda x: math.copysign(1, util.dotProduct(weights, x)), genreID), "test"
     # END_YOUR_CODE
     return weights
