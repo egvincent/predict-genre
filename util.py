@@ -71,6 +71,8 @@ def read_data(csv_path):
                 genre_id_list.append(genre["id"])
             y = tuple(genre_id_list)
 
+            # TODO: exclude genres which aren't in GENRES_BY_ID
+
             examples.append( (x, y) )
 
     return examples
@@ -89,5 +91,5 @@ def extract_n_gram_features(x, n):
 train_examples = read_data(MOVIES_METADATA_PATH)
 phi = [extract_n_gram_features(x, 1) for x,y in train_examples]
 
-print train_examples[0]
+print train_examples[:10]
 print phi[0]
