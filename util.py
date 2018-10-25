@@ -55,6 +55,7 @@ def outputWeights(weights, path):
         print >>out, '\t'.join([f, str(v)])
     out.close()
 
+<<<<<<< HEAD
 def verbosePredict(phi, y, weights, out):
     yy = 1 if dotProduct(phi, weights) >= 0 else -1
     if y:
@@ -65,6 +66,11 @@ def verbosePredict(phi, y, weights, out):
         w = weights.get(f, 0)
         print >>out, "%-30s%s * %s = %s" % (f, v, w, v * w)
     return yy
+=======
+            # TODO: exclude genres which aren't in GENRES_BY_ID
+
+            examples.append( (x, y) )
+>>>>>>> origin/master
 
 def outputErrorAnalysis(examples, featureExtractor, weights, path):
     out = open('error-analysis', 'w')
@@ -117,6 +123,7 @@ def generateClusteringExamples(numExamples, numWordsPerTopic, numFillerWords):
     examples = [generateExample() for _ in range(numExamples)]
     return examples
 
+<<<<<<< HEAD
 def outputClusters(path, examples, centers, assignments):
     '''
     Output the clusters to the given path.
@@ -134,3 +141,7 @@ def outputClusters(path, examples, centers, assignments):
             if z == j:
                 print >>out, ' '.join(examples[i].keys())
     out.close()
+=======
+print train_examples[:10]
+print phi[0]
+>>>>>>> origin/master
