@@ -1,93 +1,136 @@
-import csv
-import json
-import collections
+import os, random, operator, sys
+from collections import Counter
 
-# Schema of movie metadata file:
-#   adult,belongs_to_collection,budget,genres,homepage,id,imdb_id,
-#   original_language,original_title,overview,popularity,poster_path,
-#   production_companies,production_countries,release_date,revenue,runtime,
-#   spoken_languages,status,tagline,title,video,vote_average,vote_count
-# Notably:
-#   3: genres
-#   9: overview
-MOVIES_METADATA_PATH = "movies_metadata.csv"
+def dotProduct(d1, d2):
+    """
+    @param dict d1: a feature vector represented by a mapping from a feature (string) to a weight (float).
+    @param dict d2: same as d1
+    @return float: the dot product between d1 and d2
+    """
+    if len(d1) < len(d2):
+        return dotProduct(d2, d1)
+    else:
+        return sum(d1.get(f, 0) * v for f, v in d2.items())
 
-# Dict ID -> genre name for all genres we care about.
-# Full list of genres include production companies and medium "TV Movie"
-# which we exclude:
-#   [(12, u'Adventure'), (14, u'Fantasy'), (16, u'Animation'), (18, u'Drama'),
-#   (27, u'Horror'), (28, u'Action'), (35, u'Comedy'), (36, u'History'),
-#   (37, u'Western'), (53, u'Thriller'), (80, u'Crime'), (99, u'Documentary'),
-#   (878, u'Science Fiction'), (2883, u'Aniplex'), (7759, u'GoHands'),
-#   (7760, u'BROSTA TV'), (7761, u'Mardock Scramble Production Committee'),
-#   (9648, u'Mystery'), (10402, u'Music'), (10749, u'Romance'),
-#   (10751, u'Family'), (10752, u'War'), (10769, u'Foreign'),
-#   (10770, u'TV Movie'), (11176, u'Carousel Productions'),
-#   (11602, u'Vision View Entertainment'), (17161, u'Odyssey Media'),
-#   (18012, u'Pulser Productions'), (18013, u'Rogue State'),
-#   (23822, u'The Cartel'), (29812, u'Telescene Film Group Productions'),
-#   (33751, u'Sentai Filmworks')]
-GENRES_BY_ID = {
-    12: "Adventure",
-    14: "Fantasy",
-    16: "Animation",
-    18: "Drama",
-    27: "Horror",
-    28: "Action",
-    35: "Comedy",
-    36: "History",
-    37: "Western",
-    53: "Thriller",
-    80: "Crime",
-    99: "Documentary",
-    878: "Science Fiction",
-    9648: "Mystery",
-    10402: "Music",
-    10749: "Romance",
-    10751: "Family",
-    10752: "War",
-    10769: "Foreign"
-}
+def increment(d1, scale, d2):
+    """
+    Implements d1 += scale * d2 for sparse vectors.
+    @param dict d1: the feature vector which is mutated.
+    @param float scale
+    @param dict d2: a feature vector.
+    """
+    for f, v in d2.items():
+        d1[f] = d1.get(f, 0) + v * scale
 
-# returns a list of pairs (x, y) such that:
-#   - x is the overview string
-#   - y is the corresponding genre ID tuple
-def read_data(csv_path):
+def readExamples(path):
+    '''
+    Reads a set of training examples.
+    '''
     examples = []
-    with open(csv_path, "rb") as csvfile:
-        reader = csv.reader(csvfile)
-        # each row is a list of strings
-        for row in reader:
-            if reader.line_num == 1:
-                continue  # skip header/schema line
-
-            x = row[9]
-
-            genres = row[3].replace("'", '"')  # ' -> " for json package
-            genre_dict_list = json.loads(genres)
-            genre_id_list = []
-            for genre in genre_dict_list:
-                # genre in format {"id": <int>, "name": <string>}
-                genre_id_list.append(genre["id"])
-            y = tuple(genre_id_list)
-
-            examples.append( (x, y) )
-
+    for line in open(path):
+        # Format of each line: <output label (+1 or -1)> <input sentence>
+        y, x = line.split(' ', 1)
+        examples.append((x.strip(), int(y)))
+    print 'Read %d examples from %s' % (len(examples), path)
     return examples
 
-# returns a sparse feature vector (default dict) in the format
-#   (n adjacent words) -> (1 if present else 0)
-def extract_n_gram_features(x, n):
-    # TODO
+def evaluatePredictor(examples, predictor, genreID):
+    '''
+    predictor: a function that takes an x and returns a predicted y.
+    Given a list of examples (x, y), makes predictions based on |predict| and returns the fraction
+    of misclassiied examples.
+    '''
+    error = 0
+    for x, y in examples:
+        if predictor(x) != 1 and genreID in y:
+            error += 1
+        elif predictor(x) == 1 and genreID not in y:
+            error += 1
+    return 1.0 * error / len(examples)
 
-    # 1-grams only:
-    n = 1
-    return collections.defaultdict(float, [(word, 1) for word in x.split()])
+def outputWeights(weights, path):
+    print "%d weights" % len(weights)
+    out = open(path, 'w')
+    for f, v in sorted(weights.items(), key=lambda (f, v) : -v):
+        print >>out, '\t'.join([f, str(v)])
+    out.close()
 
+def verbosePredict(phi, y, weights, out):
+    yy = 1 if dotProduct(phi, weights) >= 0 else -1
+    if y:
+        print >>out, 'Truth: %s, Prediction: %s [%s]' % (y, yy, 'CORRECT' if y == yy else 'WRONG')
+    else:
+        print >>out, 'Prediction:', yy
+    for f, v in sorted(phi.items(), key=lambda (f, v) : -v * weights.get(f, 0)):
+        w = weights.get(f, 0)
+        print >>out, "%-30s%s * %s = %s" % (f, v, w, v * w)
+    return yy
 
-# example:
-train_examples = read_data(MOVIES_METADATA_PATH)
-phi = [extract_n_gram_features(x, 1) for x,y in train_examples]
+def outputErrorAnalysis(examples, featureExtractor, weights, path):
+    out = open('error-analysis', 'w')
+    for x, y in examples:
+        print >>out, '===', x
+        verbosePredict(featureExtractor(x), y, weights, out)
+    out.close()
 
-print train_examples[0]
-print phi[0]
+def interactivePrompt(featureExtractor, weights):
+    while True:
+        print '> ',
+        x = sys.stdin.readline()
+        if not x: break
+        phi = featureExtractor(x) 
+        verbosePredict(phi, None, weights, sys.stdout)
+
+############################################################
+
+def generateClusteringExamples(numExamples, numWordsPerTopic, numFillerWords):
+    '''
+    Generate artificial examples inspired by sentiment for clustering.
+    Each review has a hidden sentiment (positive or negative) and a topic (plot, acting, or music).
+    The actual review consists of 2 sentiment words, 4 topic words and 2 filler words, for example:
+
+        good:1 great:1 plot1:2 plot7:1 plot9:1 filler0:1 filler10:1
+
+    numExamples: Number of examples to generate
+    numWordsPerTopic: Number of words per topic (e.g., plot0, plot1, ...)
+    numFillerWords: Number of words per filler (e.g., filler0, filler1, ...)
+    '''
+    sentiments = [['bad', 'awful', 'worst', 'terrible'], ['good', 'great', 'fantastic', 'excellent']]
+    topics = ['plot', 'acting', 'music']
+    def generateExample():
+        x = Counter()
+        # Choose 2 sentiment words according to some sentiment
+        sentimentWords = random.choice(sentiments)
+        x[random.choice(sentimentWords)] += 1
+        x[random.choice(sentimentWords)] += 1
+        # Choose 4 topic words from a fixed topic
+        topic = random.choice(topics)
+        x[topic + str(random.randint(0, numWordsPerTopic-1))] += 1
+        x[topic + str(random.randint(0, numWordsPerTopic-1))] += 1
+        x[topic + str(random.randint(0, numWordsPerTopic-1))] += 1
+        x[topic + str(random.randint(0, numWordsPerTopic-1))] += 1
+        # Choose 2 filler words
+        x['filler' + str(random.randint(0, numFillerWords-1))] += 1
+        return x
+
+    random.seed(42)
+    examples = [generateExample() for _ in range(numExamples)]
+    return examples
+
+def outputClusters(path, examples, centers, assignments):
+    '''
+    Output the clusters to the given path.
+    '''
+    print 'Outputting clusters to %s' % path
+    out = open(path, 'w')
+    for j in range(len(centers)):
+        print >>out, '====== Cluster %s' % j
+        print >>out, '--- Centers:'
+        for k, v in sorted(centers[j].items(), key = lambda (k,v) : -v):
+            if v != 0:
+                print >>out, '%s\t%s' % (k, v)
+        print >>out, '--- Assigned points:'
+        for i, z in enumerate(assignments):
+            if z == j:
+                print >>out, ' '.join(examples[i].keys())
+    out.close()
