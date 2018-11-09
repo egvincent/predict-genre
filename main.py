@@ -3,6 +3,7 @@ import json
 import collections
 import util
 import math
+import random
 
 # Schema of movie metadata file:
 #   adult,belongs_to_collection,budget,genres,homepage,id,imdb_id,
@@ -67,7 +68,6 @@ def learnPredictor(trainExamples, testExamples, genreID, numIters, eta):
     '''
     weights = {}  # feature => weight
     # BEGIN_YOUR_CODE (our solution is 12 lines of code, but don't worry if you deviate from this)
-
     for i in range(numIters):
         for idx, j in enumerate(trainExamples):
             f = j[0]
@@ -121,9 +121,35 @@ def read_data(csv_path):
 #   (n adjacent words) -> (1 if present else 0)
 def extract_n_gram_features(x, n):
     # TODO
-
     # currently only doing 1-grams:
     return collections.defaultdict(float, [(word, 1) for word in x.split()])
+
+
+def cosine_similarity(d1, d2):
+    vec1 = list(d1.values())
+    vec2 = list(d2.values())
+    sum11, sum12, sum22 = 0, 0, 0
+    for i in range(len(vec1)):
+        x = vec1[i];
+        y = vec2[i]
+        sum11 += x * x
+        sum22 += y * y
+        sum12 += x * y
+    return sum12 / math.sqrt(sum11 * sum22)
+
+
+
+def jaccard_similarity(d1, d2):
+    d1 = set(d1.values)
+    d2 = set(d2.values)
+    intersection = len(d1.intersection(d2))
+    union = (len(d1) + len(d2)) - intersection
+    return float(intersection) / union
+
+
+
+
+
 
 
 # example:
@@ -131,18 +157,53 @@ train_examples = read_data(MOVIES_METADATA_PATH)
 n_grams = 1
 train = [(extract_n_gram_features(x, n_grams), y) for x,y in train_examples]
 
+training_data = train[0:int(.8 * len(train))]
+test_data = train[int(.8 * len(train)):]
+
 for genreID in GENRES_BY_ID:
-    print GENRES_BY_ID[genreID]
-    learnPredictor(train[0:int(.8 * len(train))], train[int(.8 * len(train)):], genreID, 20, .01)
-
-
-print train[0]
-
+    # print GENRES_BY_ID[genreID]
+    # learnPredictor(training_data, test_data, genreID, 20, .01)
+    pass
 
 
 
 
+def n_top_values(my_list, n):
+    return sorted(range(len(my_list)), key=lambda i: my_list[i])[-n:]
 
 
+def classify_jaccard(training_data, test_data):
+    predictions = []
+    for i in test_data:
+        k_nn = []
+        for j in training_data:
+            k_nn.append(jaccard_similarity(j[0], i[0]))
+        k = 10
+        top_k = n_top_values(k_nn, k)
+        closest = []
+        for j in top_k:
+            closest.append(training_data[j])
+        genres = set()
+        for j in closest:
+            for g in j[1]:
+                genres.append(g)
+        final_pred = []
+        threshold = .5
+        for g in genres:
+            num_containing = 0
+            for x in closest:
+                if g in x[1]:
+                    num_containing += 1
+            if float(num_containing) / k >= threshold:
+                final_pred.append(g)
+        predictions.append(final_pred)
+
+
+
+
+
+
+
+classify_jaccard(training_data, test_data)
 
 
