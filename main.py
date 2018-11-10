@@ -4,6 +4,8 @@ import collections
 import util
 import math
 import random
+# from gensim.models import Word2Vec    # deprecated apparently
+from gensim.models import KeyedVectors
 
 # Schema of movie metadata file:
 #   adult,belongs_to_collection,budget,genres,homepage,id,imdb_id,
@@ -218,6 +220,15 @@ test_data = examples[int(.8 * len(examples)):]
 #     print "n = 5, use_counts, use_characters"
 #     learnPredictor(examples_counts_5_gram_chars[0:int(.8 * len(examples))], examples[int(.8 * len(examples)):], genreID, 20,
 #                    .01)
+
+
+
+# load a ~3.5gb pretrained model file, which takes up ~4.5gb memory to store all the vectors
+word2vec_model = KeyedVectors.load_word2vec_format(
+    './GoogleNews-vectors-negative300.bin', binary=True)
+
+print "vector for 'test': ", word2vec_model.wv["test"]
+
 
 
 def n_top_values(my_list, n):
