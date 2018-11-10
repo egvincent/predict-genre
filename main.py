@@ -139,7 +139,7 @@ def extract_n_gram_features(x, n, use_counts=False, use_characters=False):
     features = collections.defaultdict(float)
 
     words_or_chars = x
-    if use_characters:
+    if not use_characters:
         words_or_chars = words_or_chars.split()
 
     for i in range(len(words_or_chars) - n + 1):
@@ -166,12 +166,22 @@ def cosine_similarity(d1, d2):
     return sum12 / math.sqrt(sum11 * sum22)
 
 
+#pass in two full example
+def jaccard_similarity(a, b):
+    d1 = set()
+    d2 = set()
+    d3 = set()  # copy of d1
+    if len(a[0]) == 0 and len(b[0]) == 0:
+        return 1
+    for i in a[0]:
+        d1.add(i)
+        d3.add(i)
 
-def jaccard_similarity(d1, d2):
-    d1 = set(d1.values)
-    d2 = set(d2.values)
+    for i in b[0]:
+        d2.add(i)
+
     intersection = len(d1.intersection(d2))
-    union = (len(d1) + len(d2)) - intersection
+    union = (len(d3) + len(d2)) - intersection
     return float(intersection) / union
 
 
@@ -214,40 +224,53 @@ def n_top_values(my_list, n):
     return sorted(range(len(my_list)), key=lambda i: my_list[i])[-n:]
 
 
+def predict_single_example(training_data, i):
+    k_nn = []
+    for j in training_data:
+        k_nn.append(jaccard_similarity(j, i))
+    k = 10
+    top_k = n_top_values(k_nn, k)
+    closest = []
+    for j in top_k:
+        closest.append(training_data[j])
+    genres = set()
+    for j in closest:
+        for g in j[1]:
+            genres.add(g)
+    final_pred = []
+    threshold = .25
+    for g in genres:
+        num_containing = 0
+        for x in closest:
+            if g in x[1]:
+                num_containing += 1
+        if float(num_containing) / k >= threshold:
+            final_pred.append(g)
+    return final_pred
+
 def classify_jaccard(training_data, test_data):
     predictions = []
     for i in test_data:
-        k_nn = []
-        for j in training_data:
-            k_nn.append(jaccard_similarity(j[0], i[0]))
-        k = 10
-        top_k = n_top_values(k_nn, k)
-        closest = []
-        for j in top_k:
-            closest.append(training_data[j])
-        genres = set()
-        for j in closest:
-            for g in j[1]:
-                genres.append(g)
-        final_pred = []
-        threshold = .5
-        for g in genres:
-            num_containing = 0
-            for x in closest:
-                if g in x[1]:
-                    num_containing += 1
-            if float(num_containing) / k >= threshold:
-                final_pred.append(g)
+        final_pred = predict_single_example(training_data, i)
         predictions.append(final_pred)
     return predictions
 
 
+knn_predictions_for_test_data = classify_jaccard(training_data, test_data)
 
+def evaluateJaccard(examples, predictions, genreID):
+    '''
+    predictor: a function that takes an x and returns a predicted y.
+    Given a list of examples (x, y), makes predictions based on |predict| and returns the fraction
+    of misclassiied examples.
+    '''
+    error = 0
+    for i in range(examples):
+        if genreID not in predictions[i] and genreID in examples[i][1]:
+            error += 1
+        elif genreID not in predictions[i] and genreID not in examples[i][1]:
+            error += 1
+    return 1.0 * error / len(examples)
 
-
-
-
-
-classify_jaccard(training_data, test_data)
-
-
+for genreID in GENRES_BY_ID:
+    print evaluateJaccard(test_data, knn_predictions_for_test_data, genreID)
