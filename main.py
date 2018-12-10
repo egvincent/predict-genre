@@ -55,21 +55,17 @@ GENRES_BY_ID = {
 }
 
 
-def learnPredictor(trainExamples, testExamples, genreID, numIters, eta):
+def learnPredictor(trainExamples, genreID, numIters, eta):
     '''
-    Given |trainExamples| and |testExamples| (each one is a list of (x,y)
+    Given |trainExamples| (a list of (x,y)
     pairs), a |featureExtractor| to apply to x, and the number of iterations to
     train |numIters|, the step size |eta|, return the weight vector (sparse
     feature vector) learned.
 
     You should implement stochastic gradient descent.
-
-    Note: only use the trainExamples for training!
-    You should call evaluatePredictor() on both trainExamples and testExamples
-    to see how you're doing as you learn after each iteration.
     '''
 
-    # trainExamples and testExamples are lists of (x, y) pairs in the format:
+    # trainExamples is lists of (x, y) pairs in the format:
     #   x: a feature vector in the form of a defaultdict
     #   y: a tuple of all the genreIDs that this movie is tagged with
 
@@ -91,14 +87,6 @@ def learnPredictor(trainExamples, testExamples, genreID, numIters, eta):
             if 1 - grad * temp > 0: # formula used to be 1 - grad * j[1] and j[1] used to be 0 or 1: the tru label.
                 for k in f:
                     weights[k] -= eta * f[k] * temp*-1
-    print util.evaluatePredictor(
-        examples = trainExamples, 
-        predictor = lambda x: 1 if util.dotProduct(weights, x) > 0 else -1, 
-        genreID = genreID), "train error,", "genre=", genreID
-    print util.evaluatePredictor(
-        examples = testExamples, 
-        predictor = lambda x: 1 if util.dotProduct(weights, x) > 0 else -1, 
-        genreID = genreID), "test error,", "genre=", genreID
     # END_YOUR_CODE
     return weights
 
@@ -137,7 +125,7 @@ def read_data(csv_path):
 #   - if false, vector contains 1 if the n-gram is present, 0 otherwise
 # @param use_characters:
 #   - if true: use character grams instead of word grams (i.e. tuples of n adjacent characters)
-def extract_n_gram_features(x, n, use_counts=False, use_characters=False):
+def extract_n_gram_features(x, n=5, use_counts=True, use_characters=True):
     features = collections.defaultdict(float)
 
     words_or_chars = x
@@ -153,7 +141,6 @@ def extract_n_gram_features(x, n, use_counts=False, use_characters=False):
             features[n_gram] = 1
 
     return features
-
 
 def cosine_similarity(d1, d2):
     vec1 = list(d1.values())
@@ -186,60 +173,76 @@ def jaccard_similarity(a, b):
     union = (len(d3) + len(d2)) - intersection
     return float(intersection) / union
 
+def eval_n_grams_parameters():
+    for use_characters in [False, True]:
+        for use_counts in [False, True]:
+            print "use_characters={}, use_counts={}".format(use_characters, use_counts)
+
+            n_values = [3, 5, 7] if use_characters else [1, 2, 3]
+            print "n values in order:"
+            print ",".join([str(n) for n in n_values])
+
+            # store error values for each n value, so we can print them out side by side
+            # so we can paste them into a spreadsheet
+            error_values = [[0.0] * len(n_values) for i in range(len(GENRES_BY_ID))]
+
+            for n_i,n in enumerate(n_values):
+                examples = [(extract_n_gram_features(x, n, use_counts, use_characters), y) 
+                    for x,y in raw_examples[0:int(0.25 * len(raw_examples))]]
+
+                row = 0  # genre, reindexed starting at 0, for adding to error_values
+                for genreID in GENRES_BY_ID:
+                    # print GENRES_BY_ID[genreID]
+                    # learnPredictor(training_data, test_data, genreID, 20, .01)
+
+                    weights = learnPredictor(
+                        trainExamples = examples[:int(.8 * len(examples))], 
+                        genreID = genreID, 
+                        numIters = 20, 
+                        eta = .01)
+
+                    error_values[row][n_i] = util.evaluatePredictor(
+                            examples = examples[int(.75 * len(examples)):],
+                            predictor = lambda phi: 1 if util.dotProduct(weights, phi) > 0 else -1, 
+                            genreID = genreID)
+                    row += 1
+            # print error values
+            for error_value_list in error_values:
+                print ",".join([str(err) for err in error_value_list])
 
 
 
+### Word2Vec
+
+# # load a ~3.5gb pretrained model file, which takes up ~4.5gb memory to store all the vectors
+# word2vec_model = KeyedVectors.load_word2vec_format(
+#     './GoogleNews-vectors-negative300.bin', binary=True)
+
+# print "vector for 'test': ", word2vec_model.wv["test"]
 
 
 
-# example:
+### KNN
+
 raw_examples = read_data(MOVIES_METADATA_PATH)
-print "generating features ..."
-examples = [(extract_n_gram_features(x, n=1), y) for x,y in raw_examples]
-#examples_counts = [(extract_n_gram_features(x, n=1, use_counts=True), y) for x,y in raw_examples]
-#examples_counts_5_gram = [(extract_n_gram_features(x, n=5, use_counts=True), y) for x,y in raw_examples]
-#examples_counts_5_gram_chars = [(extract_n_gram_features(x, n=1, use_counts=True, use_characters=True), y) for x,y in raw_examples]
+# note: not really n-grams -- just a dictionary of {word -> 1}, because it's simpler to write that way
+examples = [(extract_n_gram_features(x, n=1, use_counts=False, use_characters=False), y) for x,y in raw_examples]
 
-training_data = examples[0:int(.8 * len(examples))]
-test_data = examples[int(.8 * len(examples)):]
+training_data = examples[0:int(.1 * len(examples))]
+test_data = examples[int(.95 * len(examples)):]
 
-# for genreID in GENRES_BY_ID:
-#     # print GENRES_BY_ID[genreID]
-#     # learnPredictor(training_data, test_data, genreID, 20, .01)
-#     print GENRES_BY_ID[genreID]
-#
-#     print "n = 1"
-#     learnPredictor(examples[0:int(.8 * len(examples))], examples[int(.8 * len(examples)):], genreID, 20, .01)
-#
-#     print "n = 1, use_counts"
-#     learnPredictor(examples_counts[0:int(.8 * len(examples))], examples[int(.8 * len(examples)):], genreID, 20, .01)
-#
-#     print "n = 5, use_counts"
-#     learnPredictor(examples_counts_5_gram[0:int(.8 * len(examples))], examples[int(.8 * len(examples)):], genreID, 20, .01)
-#
-#     print "n = 5, use_counts, use_characters"
-#     learnPredictor(examples_counts_5_gram_chars[0:int(.8 * len(examples))], examples[int(.8 * len(examples)):], genreID, 20,
-#                    .01)
-
-
-
-# load a ~3.5gb pretrained model file, which takes up ~4.5gb memory to store all the vectors
-word2vec_model = KeyedVectors.load_word2vec_format(
-    './GoogleNews-vectors-negative300.bin', binary=True)
-
-print "vector for 'test': ", word2vec_model.wv["test"]
-
-
+total_done = 0
 
 def n_top_values(my_list, n):
     return sorted(range(len(my_list)), key=lambda i: my_list[i])[-n:]
 
 
-def predict_single_example(training_data, i):
+def predict_single_example(training_data, i, index):
+    global total_done
     k_nn = []
     for j in training_data:
         k_nn.append(jaccard_similarity(j, i))
-    k = 10
+    k = 500
     top_k = n_top_values(k_nn, k)
     closest = []
     for j in top_k:
@@ -249,7 +252,7 @@ def predict_single_example(training_data, i):
         for g in j[1]:
             genres.add(g)
     final_pred = []
-    threshold = .25
+    threshold = .005
     for g in genres:
         num_containing = 0
         for x in closest:
@@ -257,31 +260,44 @@ def predict_single_example(training_data, i):
                 num_containing += 1
         if float(num_containing) / k >= threshold:
             final_pred.append(g)
-    return final_pred
+    predictions[index] = final_pred
+    total_done = total_done + 1
+    print total_done
 
+
+
+predictions = [[] for _ in range(len(test_data))]
 def classify_jaccard(training_data, test_data):
-    predictions = []
-    for i in test_data:
-        final_pred = predict_single_example(training_data, i)
-        predictions.append(final_pred)
-    return predictions
+    print len(test_data)
+    i = 0
+    num_threads = 16
+    while i + num_threads < len(test_data):
+        threads = []
+        for j in range(16):
+            threads.append(threading.Thread(target=predict_single_example, args=(training_data, test_data[i + j], i + j)))
+        for j in threads:
+            j.start()
+        for j in threads:
+            j.join()
+
+        i = i + num_threads
 
 
-knn_predictions_for_test_data = classify_jaccard(training_data, test_data)
+# classify_jaccard(training_data, test_data)
 
-def evaluateJaccard(examples, predictions, genreID):
+def evaluateJaccard(examples, genreID):
     '''
     predictor: a function that takes an x and returns a predicted y.
     Given a list of examples (x, y), makes predictions based on |predict| and returns the fraction
     of misclassiied examples.
     '''
     error = 0
-    for i in range(examples):
+    for i in range(len(examples)):
         if genreID not in predictions[i] and genreID in examples[i][1]:
             error += 1
-        elif genreID not in predictions[i] and genreID not in examples[i][1]:
+        elif genreID in predictions[i] and genreID not in examples[i][1]:
             error += 1
     return 1.0 * error / len(examples)
 
 for genreID in GENRES_BY_ID:
-    print evaluateJaccard(test_data, knn_predictions_for_test_data, genreID)
+    print evaluateJaccard(test_data, genreID), GENRES_BY_ID[genreID]

@@ -37,6 +37,8 @@ def readExamples(path):
 def evaluatePredictor(examples, predictor, genreID):
     '''
     predictor: a function that takes an x and returns a predicted y.
+    genreID: which genre the predictor predicts.
+
     Given a list of examples (x, y), makes predictions based on |predict| and returns the fraction
     of misclassiied examples.
     '''
